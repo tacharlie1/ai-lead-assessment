@@ -9,9 +9,20 @@ public sealed record ChangeSet(string Repository, string Branch, IReadOnlyList<F
     public int TotalRemoved => Files.Sum(f => f.RemovedLines.Count);
 }
 
-/// <summary>One changed file and the hunks (blocks of changed lines) inside it.</summary>
-public sealed record FileChange(string Path, ChangeKind Kind, IReadOnlyList<Hunk> Hunks)
+/// <summary>
+/// One changed file and the hunks (blocks of changed lines) inside it.
+/// <paramref name="OldPath"/> is set when the file was renamed. Binary files (images, DLLs) have no hunks.
+/// </summary>
+public sealed record FileChange(
+    string Path,
+    ChangeKind Kind,
+    IReadOnlyList<Hunk> Hunks,
+    string? OldPath = null,
+    bool IsBinary = false)
 {
+    /// <summary>True when only the name changed and no lines were added or removed.</summary>
+    public bool IsPureRename => Kind == ChangeKind.Renamed && Hunks.Count == 0 && !IsBinary;
+
     public IReadOnlyList<string> AddedLines => Hunks.SelectMany(h => h.AddedLines).ToList();
     public IReadOnlyList<string> RemovedLines => Hunks.SelectMany(h => h.RemovedLines).ToList();
 
@@ -51,4 +62,5 @@ public enum ChangeKind
     Added,
     Modified,
     Deleted,
+    Renamed,
 }

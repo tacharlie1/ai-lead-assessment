@@ -56,6 +56,7 @@ public sealed class SimulatedReviewProvider : IReviewProvider
         {
             DescribeFile(file, notes);
             CheckDeletedFile(file, notes);
+            CheckRenamedFile(file, notes);
             CheckConfigurationChange(file, notes);
 
             if (file.IsCSharp)
@@ -79,13 +80,30 @@ public sealed class SimulatedReviewProvider : IReviewProvider
 
     private static void DescribeFile(FileChange file, ReviewNotes notes)
     {
-        var description = file.Kind switch
+        var lineCounts = $"(+{file.AddedLines.Count} / -{file.RemovedLines.Count} lines)";
+
+        var description = (file.Kind, file.IsBinary) switch
         {
-            ChangeKind.Added => $"Adds `{file.Path}` (+{file.AddedLines.Count} lines).",
-            ChangeKind.Deleted => $"Deletes `{file.Path}` (-{file.RemovedLines.Count} lines).",
-            _ => $"Modifies `{file.Path}` (+{file.AddedLines.Count} / -{file.RemovedLines.Count} lines).",
+            (ChangeKind.Added, true) => $"Adds binary file `{file.Path}`.",
+            (ChangeKind.Deleted, true) => $"Deletes binary file `{file.Path}`.",
+            (ChangeKind.Renamed, true) => $"Renames binary file `{file.OldPath}` to `{file.Path}`.",
+            (_, true) => $"Modifies binary file `{file.Path}`.",
+            (ChangeKind.Added, _) => $"Adds `{file.Path}` (+{file.AddedLines.Count} lines).",
+            (ChangeKind.Deleted, _) => $"Deletes `{file.Path}` (-{file.RemovedLines.Count} lines).",
+            (ChangeKind.Renamed, _) when file.IsPureRename => $"Renames `{file.OldPath}` to `{file.Path}` (content unchanged).",
+            (ChangeKind.Renamed, _) => $"Renames `{file.OldPath}` to `{file.Path}` and changes it {lineCounts}.",
+            _ => $"Modifies `{file.Path}` {lineCounts}.",
         };
         notes.Summary.Add(description);
+    }
+
+    private static void CheckRenamedFile(FileChange file, ReviewNotes notes)
+    {
+        if (file.Kind == ChangeKind.Renamed && file.IsCSharp)
+        {
+            notes.Risks.Add($"`{file.OldPath}` is renamed to `{file.FileName}`. " +
+                            "Check the class name, namespace and any references still match.");
+        }
     }
 
     private static void CheckDeletedFile(FileChange file, ReviewNotes notes)
@@ -201,7 +219,9 @@ public sealed class SimulatedReviewProvider : IReviewProvider
     private static void CheckMissingTests(ChangeSet changes, ReviewNotes notes)
     {
         var testFiles = changes.Files.Where(f => f.IsTestFile).ToList();
-        var codeFiles = changes.Files.Where(f => f.IsCSharp && !f.IsTestFile && f.Kind != ChangeKind.Deleted);
+        // Only files whose code changed need tests; deleted files and pure renames do not.
+        var codeFiles = changes.Files.Where(f =>
+            f.IsCSharp && !f.IsTestFile && f.Kind != ChangeKind.Deleted && !f.IsPureRename);
 
         foreach (var code in codeFiles)
         {

@@ -14,6 +14,8 @@ public static class DiffParser
         string? path = null;
         var kind = ChangeKind.Modified;
         var hunks = new List<Hunk>();
+        string? oldPath = null;
+        var isBinary = false;
         string? hunkHeader = null;
         var lines = new List<DiffLine>();
 
@@ -33,12 +35,14 @@ public static class DiffParser
             FinishHunk();
             if (path is not null)
             {
-                files.Add(new FileChange(path, kind, hunks));
+                files.Add(new FileChange(path, kind, hunks, oldPath, isBinary));
             }
 
             path = null;
             kind = ChangeKind.Modified;
             hunks = [];
+            oldPath = null;
+            isBinary = false;
         }
 
         foreach (var line in diffText.ReplaceLineEndings("\n").Split('\n'))
@@ -56,6 +60,17 @@ public static class DiffParser
             else if (line.StartsWith("deleted file mode"))
             {
                 kind = ChangeKind.Deleted;
+            }
+            else if (line.StartsWith("rename from "))
+            {
+                // e.g. "rename from src/MathService.cs". The new name is already in the "diff --git" line.
+                kind = ChangeKind.Renamed;
+                oldPath = line["rename from ".Length..];
+            }
+            else if (line.StartsWith("Binary files ") || line == "GIT binary patch")
+            {
+                // e.g. "Binary files /dev/null and b/logo.png differ". There are no lines to read.
+                isBinary = true;
             }
             else if (line.StartsWith("@@"))
             {

@@ -37,6 +37,18 @@ internal static class SampleDiffs
          }
         """;
 
+    /// <summary>A new image and a file renamed without content changes, as git prints them.</summary>
+    public const string RenameAndBinary = """
+        diff --git a/logo.png b/logo.png
+        new file mode 100644
+        index 0000000..f584f40
+        Binary files /dev/null and b/logo.png differ
+        diff --git a/src/MathService.cs b/src/Calculator.cs
+        similarity index 100%
+        rename from src/MathService.cs
+        rename to src/Calculator.cs
+        """;
+
     /// <summary>A change to a single file, with no tests.</summary>
     public static string SingleFile(string path, params string[] addedLines) => $"""
         diff --git a/{path} b/{path}

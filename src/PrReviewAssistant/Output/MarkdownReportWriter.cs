@@ -56,7 +56,8 @@ public static class MarkdownReportWriter
 
         foreach (var file in changes.Files)
         {
-            md.AppendLine($"| `{file.Path}` | {file.Kind} | {file.AddedLines.Count} | {file.RemovedLines.Count} |");
+            var change = file.IsBinary ? $"{file.Kind} (binary)" : file.Kind.ToString();
+            md.AppendLine($"| `{file.Path}` | {change} | {file.AddedLines.Count} | {file.RemovedLines.Count} |");
         }
     }
 }

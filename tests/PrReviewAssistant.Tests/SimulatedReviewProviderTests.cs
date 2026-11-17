@@ -94,6 +94,24 @@ public class SimulatedReviewProviderTests
     }
 
     [Fact]
+    public async Task RenameAndBinaryFile_AreDescribedCorrectly()
+    {
+        var review = await ReviewAsync(SampleDiffs.RenameAndBinary);
+
+        Assert.Contains("Adds binary file `logo.png`.", review.Summary);
+        Assert.Contains("Renames `src/MathService.cs` to `src/Calculator.cs` (content unchanged).", review.Summary);
+        Assert.Contains(review.Risks, r => r.Contains("is renamed to `Calculator.cs`"));
+    }
+
+    [Fact]
+    public async Task PureRename_DoesNotAskForTests()
+    {
+        var review = await ReviewAsync(SampleDiffs.RenameAndBinary);
+
+        Assert.Empty(review.SuggestedTests);
+    }
+
+    [Fact]
     public async Task EmptyChangeSet_SaysThereIsNothingToReview()
     {
         var review = await ReviewAsync("");

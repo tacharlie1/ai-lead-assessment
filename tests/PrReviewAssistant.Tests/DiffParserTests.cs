@@ -66,6 +66,23 @@ public class DiffParserTests
     }
 
     [Fact]
+    public void Parse_DetectsRenamedAndBinaryFiles()
+    {
+        var changes = DiffParser.Parse(SampleDiffs.RenameAndBinary, "repo", "branch");
+
+        var image = changes.Files[0];
+        Assert.Equal("logo.png", image.Path);
+        Assert.Equal(ChangeKind.Added, image.Kind);
+        Assert.True(image.IsBinary);
+
+        var renamed = changes.Files[1];
+        Assert.Equal("src/Calculator.cs", renamed.Path);
+        Assert.Equal("src/MathService.cs", renamed.OldPath);
+        Assert.Equal(ChangeKind.Renamed, renamed.Kind);
+        Assert.True(renamed.IsPureRename);
+    }
+
+    [Fact]
     public void Parse_EmptyDiff_ReturnsNoFiles()
     {
         var changes = DiffParser.Parse("", "repo", "branch");
