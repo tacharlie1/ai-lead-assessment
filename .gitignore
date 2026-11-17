@@ -1,0 +1,21 @@
+# .NET build output
+bin/
+obj/
+TestResults/
+
+# IDE files
+.vs/
+.vscode/
+.idea/
+*.user
+
+# macOS
+.DS_Store
+
+# Default output of the tool when run from the repo root
+/review.md
+
+# Local working files, not part of the submission
+AI_Lead_Assignment.pdf
+PLAN.html
+PLAN.pdf

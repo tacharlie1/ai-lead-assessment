@@ -1,0 +1,39 @@
+diff --git a/src/Sample.DotNetApp/OrderService.cs b/src/Sample.DotNetApp/OrderService.cs
+index fdf4600..95b6f59 100644
+--- a/src/Sample.DotNetApp/OrderService.cs
++++ b/src/Sample.DotNetApp/OrderService.cs
+@@ -3,12 +3,26 @@ namespace Sample.DotNetApp;
+ public class OrderService
+ {
+     private readonly HttpClient _http = new();
++    private const string ApiKey = "demo-not-a-real-key-123";
+ 
+-    public decimal GetTotal(int orderId)
++    public decimal GetTotal(int orderId, string currency)
+     {
++        // TODO: convert currency properly
+         return LoadOrder(orderId).Total;
+     }
+ 
++    public async void SendConfirmation(int orderId)
++    {
++        try
++        {
++            var response = _http.GetAsync($"https://example.com/notify/{orderId}").Result;
++            response.EnsureSuccessStatusCode();
++        }
++        catch (Exception)
++        {
++        }
++    }
++
+     private Order LoadOrder(int orderId) => new(orderId, 100m);
+ }
+ 
+diff --git a/src/Sample.DotNetApp/appsettings.json b/src/Sample.DotNetApp/appsettings.json
+index 48f25e8..9d0dc25 100644
+--- a/src/Sample.DotNetApp/appsettings.json
++++ b/src/Sample.DotNetApp/appsettings.json
+@@ -1 +1 @@
+-{ "Logging": { "LogLevel": { "Default": "Information" } } }
++{ "Logging": { "LogLevel": { "Default": "Debug" } } }
