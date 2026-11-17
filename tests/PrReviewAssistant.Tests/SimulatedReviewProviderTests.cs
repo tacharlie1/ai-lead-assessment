@@ -23,6 +23,24 @@ public class SimulatedReviewProviderTests
     }
 
     [Fact]
+    public async Task GuardWithMatchingNewTest_IsReportedAsCovered()
+    {
+        var review = await ReviewAsync(SampleDiffs.MinorFix);
+
+        Assert.Contains(review.SuggestedTests, t => t.StartsWith("The guard in `MathService.Divide` is covered by a new test."));
+        Assert.DoesNotContain(review.SuggestedTests, t => t.StartsWith("Test that"));
+    }
+
+    [Fact]
+    public async Task GuardWithoutTest_AsksForOne()
+    {
+        var review = await ReviewAsync(SampleDiffs.SingleFile(
+            "src/MathService.cs", "        throw new ArgumentOutOfRangeException(nameof(value));"));
+
+        Assert.Contains(review.SuggestedTests, t => t.StartsWith("Test that") && t.Contains("ArgumentOutOfRangeException"));
+    }
+
+    [Fact]
     public async Task NewUnitTests_AreCounted()
     {
         var review = await ReviewAsync(SampleDiffs.MinorFix);

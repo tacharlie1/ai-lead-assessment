@@ -52,6 +52,9 @@ public sealed class SimulatedReviewProvider : IReviewProvider
             return Task.FromResult(notes.ToResult());
         }
 
+        // Lines added to test files anywhere in the change, so rules can see what is already tested.
+        var newTestLines = changes.Files.Where(f => f.IsTestFile).SelectMany(f => f.AddedLines).ToList();
+
         foreach (var file in changes.Files)
         {
             DescribeFile(file, notes);
@@ -62,7 +65,7 @@ public sealed class SimulatedReviewProvider : IReviewProvider
             if (file.IsCSharp)
             {
                 CheckNewTests(file, notes);
-                CheckGuardClauses(file, notes);
+                CheckGuardClauses(file, newTestLines, notes);
                 CheckPublicSignatureChanges(file, notes);
                 CheckRiskyCode(file, notes);
                 CheckHardCodedSecrets(file, notes);
@@ -132,7 +135,7 @@ public sealed class SimulatedReviewProvider : IReviewProvider
     }
 
     /// <summary>A new <c>throw new ...</c> usually means a new guard: the behaviour changes for some inputs.</summary>
-    private static void CheckGuardClauses(FileChange file, ReviewNotes notes)
+    private static void CheckGuardClauses(FileChange file, IReadOnlyList<string> newTestLines, ReviewNotes notes)
     {
         if (file.IsTestFile)
         {
@@ -151,13 +154,25 @@ public sealed class SimulatedReviewProvider : IReviewProvider
                 }
 
                 var exception = match.Groups[1].Value;
-                var location = DescribeLocation(file, hunk, index);
+                var method = FindMethodName(hunk, index);
+                var className = Path.GetFileNameWithoutExtension(file.Path);
+                var location = method is null ? $"`{file.FileName}`" : $"`{className}.{method}`";
 
                 notes.Summary.Add($"Adds a guard to {location} that throws `{exception}`.");
                 notes.Risks.Add($"Behaviour change in {location}: input that used to return a result now throws `{exception}`. " +
                                 "Existing callers may rely on the old behaviour, so communicate the change.");
-                notes.SuggestedTests.Add($"Test that {location} throws `{exception}` for the guarded input, " +
-                                         "and add boundary tests around it (for example negative values).");
+
+                if (IsCoveredByNewTest(newTestLines, exception, method))
+                {
+                    notes.SuggestedTests.Add($"The guard in {location} is covered by a new test. " +
+                                             "Consider boundary tests around it (for example negative values).");
+                }
+                else
+                {
+                    notes.SuggestedTests.Add($"Test that {location} throws `{exception}` for the guarded input, " +
+                                             "and add boundary tests around it (for example negative values).");
+                }
+
                 notes.Suggestions.Add($"Check `{exception}` and its message match the convention used by similar methods.");
             }
         }
@@ -247,25 +262,30 @@ public sealed class SimulatedReviewProvider : IReviewProvider
     // ---- Helpers -----------------------------------------------------------------------------
 
     /// <summary>
-    /// Names the method a line sits in, e.g. "`MathService.Divide`". It looks upwards through the hunk
-    /// for a method signature, then falls back to git's hunk header, then to the file name.
+    /// Finds the method a line sits in, e.g. "Divide". It looks upwards through the hunk for a method
+    /// signature, then falls back to git's hunk header. Returns null if neither names a method.
     /// </summary>
-    private static string DescribeLocation(FileChange file, Hunk hunk, int lineIndex)
+    private static string? FindMethodName(Hunk hunk, int lineIndex)
     {
-        var className = Path.GetFileNameWithoutExtension(file.Path);
-
         for (var i = lineIndex - 1; i >= 0; i--)
         {
             var signature = MethodSignature.Match(hunk.Lines[i].Text);
             if (signature.Success && hunk.Lines[i].Kind != DiffLineKind.Removed)
             {
-                return $"`{className}.{signature.Groups[1].Value}`";
+                return signature.Groups[1].Value;
             }
         }
 
         var header = MethodSignature.Match(hunk.Header);
-        return header.Success ? $"`{className}.{header.Groups[1].Value}`" : $"`{file.FileName}`";
+        return header.Success ? header.Groups[1].Value : null;
     }
+
+    /// <summary>
+    /// True when a new test in this change already mentions both the exception and the method,
+    /// e.g. <c>Assert.Throws&lt;DivideByZeroException&gt;(() =&gt; _service.Divide(10, 0))</c>.
+    /// </summary>
+    private static bool IsCoveredByNewTest(IReadOnlyList<string> newTestLines, string exception, string? method) =>
+        newTestLines.Any(line => line.Contains(exception) && (method is null || line.Contains(method)));
 
     private static string Snippet(string line)
     {
